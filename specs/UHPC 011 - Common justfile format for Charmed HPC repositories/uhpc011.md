@@ -54,7 +54,7 @@ must still be present.
 
 Recipes:
 
-```
+```just
 # Performed if no recipes are specified. Must have this implementation
 [private]
 default:
@@ -82,7 +82,7 @@ test *targets:
 Repositories may implement the following recipes as required. If implemented, they must use the
 recipe names given below:
 
-```
+```just
 # Apply formatting standards
 fmt:
 
@@ -124,7 +124,7 @@ specified semantics are followed.
 
 Note, this implementation requires an environment where `bash` is available.
 
-```
+```just
 test *targets:
     #!/usr/bin/env bash
     if [ "{{targets}}" = "" ]; then
@@ -156,7 +156,7 @@ integration:
 
 ### Example justfile - slurm-charms repository
 
-```
+```just
 # Copyright 2026 Canonical Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -256,7 +256,7 @@ help:
 
 ### Example justfile - charmed-hpc-terraform repository
 
-```
+```just
 # Copyright 2026 Canonical Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
