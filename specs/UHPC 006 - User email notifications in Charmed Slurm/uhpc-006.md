@@ -33,7 +33,7 @@ This method was chosen as the upstream Slurm-Mail project provides deb package g
 
 The Slurm-Mail project includes a [`build-tools`](https://github.com/neilmunday/slurm-mail/tree/8337cf2/build-tools) directory containing scripts that dynamically generate deb and rpm packages targeting various Linux distributions, including the Ubuntu family. These scripts focus on producing packages for use by the upstream release process and, as such, cannot be used directly to produce a deb package suitable for Charmed HPC. In particular, the scripts employ constants specific to the maintainer: name, email address, as so on.
 
-To address this, a [Slurm-Mail fork containing static Debian build files](https://github.com/charmed-hpc/slurm-mail/tree/9902100/debian) has been created in the Charmed HPC org. The resulting deb package has been added to the [PPA used to distribute Slurm for Charmed HPC](https://launchpad.net/~ubuntu-hpc/+archive/ubuntu/slurm-wlm-25.11) to allow for installation from within the `slurmctld` charm using the existing repository configuration.
+To address this, a [Slurm-Mail fork containing static Debian build files](https://github.com/canonical/slurm-mail/tree/9902100/debian) has been created in the Charmed HPC org. The resulting deb package has been added to the [PPA used to distribute Slurm for Charmed HPC](https://launchpad.net/~ubuntu-hpc/+archive/ubuntu/slurm-wlm-25.11) to allow for installation from within the `slurmctld` charm using the existing repository configuration.
 
 #### From snap (rejected)
 

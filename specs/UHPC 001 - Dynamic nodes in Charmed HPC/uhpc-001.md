@@ -455,4 +455,4 @@ Expected work items include:
 ## Further Information
 
 1. [Slurm dynamic nodes documentation](https://slurm.schedmd.com/dynamic_nodes.html)
-2. [Charmed HPC benchmarks repository](https://github.com/charmed-hpc/charmed-hpc-benchmarks)
+2. [Charmed HPC benchmarks repository](https://github.com/canonical/charmed-hpc-benchmarks)

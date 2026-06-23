@@ -241,7 +241,7 @@ juju config slurmd default_node_reason="Machine rebooted"
 
 ## Further Information
 
-1. [Original Ubuntu HPC community discussion on GitHub Discussions](https://github.com/orgs/charmed-hpc/discussions/16)
+1. [Original Ubuntu HPC community discussion on GitHub Discussions](https://github.com/canonical/hpc-team/discussions/16)
 2. [`StateSaveLocation` documentation](https://slurm.schedmd.com/slurm.conf.html#OPT_StateSaveLocation)
 3. [`juju-reboot` documentation](https://documentation.ubuntu.com/juju/3.6/reference/hook-command/list-of-hook-commands/juju-reboot/)
 4. [“down” state documentation](https://slurm.schedmd.com/slurm.conf.html#OPT_DOWN)

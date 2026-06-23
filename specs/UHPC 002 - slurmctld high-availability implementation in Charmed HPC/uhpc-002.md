@@ -69,7 +69,7 @@ An HA setup has the following prerequisites:
 
 #### Implemented approach: filesystem-client charm integration
 
-To allow for flexibility in the shared file system, support for the [`filesystem-client` charm](https://github.com/charmed-hpc/filesystem-charms) has been implemented. This enables the user to integrate with the file system of their choice, e.g. their own CephFS deployment, a cloud-specific managed file system, or another that meets their performance and capacity requirements.
+To allow for flexibility in the shared file system, support for the [`filesystem-client` charm](https://github.com/canonical/filesystem-charms) has been implemented. This enables the user to integrate with the file system of their choice, e.g. their own CephFS deployment, a cloud-specific managed file system, or another that meets their performance and capacity requirements.
 
 Using the local disk for StateSaveLocation data, without the `filesystem-client`, continues to be supported via the new `use-network-state` configuration option for the `slurmctld` charm. The default is `False`, which results in the `slurmctld` charm functioning as it does now: StateSaveLocation data is stored locally at `/var/lib/slurm/checkpoint` and the application cannot scale to support HA.
 

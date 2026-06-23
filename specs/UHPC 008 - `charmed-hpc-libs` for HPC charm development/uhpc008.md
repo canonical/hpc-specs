@@ -225,7 +225,7 @@ The overall publishing flow for a new `charmed-hpc-libs` release is:
 
 ## Further information
 
-1. [`hpc-libs` on GitHub](https://github.com/charmed-hpc/hpc-libs)
+1. [`hpc-libs` on GitHub](https://github.com/canonical/charmed-hpc-libs)
 2. [`uv` workspace documentation](https://docs.astral.sh/uv/concepts/projects/workspaces/#searching-across-multiple-indexes)
 3. [`uv` publish documentation](https://docs.astral.sh/uv/guides/package/#updating-your-version)
 4. [`charmlibs-apt` on PyPI](https://pypi.org/project/charmlibs-apt/)

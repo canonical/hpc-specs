@@ -124,5 +124,5 @@ def _on_install(self, event: ops.InstallEvent) -> None:
 ## Further Information
 
 1. [`slurmd` manpage](https://manpages.ubuntu.com/manpages/resolute/en/man8/slurmd.8.html)
-2. [Issue #83 on `charmed-hpc/slurm-charms`](https://github.com/charmed-hpc/slurm-charms/issues/83)
+2. [Issue #83 on `canonical/slurm-charms`](https://github.com/canonical/slurm-charms/issues/83)
 3. [`slurm.conf` manpage](https://slurm.schedmd.com/slurm.conf.html#SECTION_DESCRIPTION)
