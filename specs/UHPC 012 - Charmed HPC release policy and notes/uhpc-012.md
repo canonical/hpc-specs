@@ -13,164 +13,196 @@ This spec details the release policy for Charmed HPC.
 
 A consistent release policy is necessary to keep our community aware of upcoming major changes, bug fixes, and security updates, while ensuring that the community has some expected degree of stability.
 
-Charmed HPC components:
+Since Charmed HPC is a composition of multiple charms and artifacts, there must be a well-defined release policy that developers and users can reference to know when they can expect new features, bug fixes, security updates, and compatibility guarantees across the set of charms.
+
+## Specification
+
+## Artifacts
+
+Charmed HPC artifacts:
 
 <!-- Update this list as the Charmed HPC portfolio evolves -->
 
 - Charmed Slurm (see [UHPC 003](../UHPC%20003%20-%20Release%20policy%20and%20notes%20for%20Charmed%20Slurm/uhpc-003.md))
-- Additional workload manager charms
-- HPC shared libraries (`charmed-hpc-libs`)
-- Supporting infrastructure charms
-
-Since Charmed HPC is a composition of multiple charms and artifacts spanning different workload managers and supporting services, there must be a well-defined release policy that developers and users can reference to know when they can expect new features, bug fixes, security updates, and compatibility guarantees across the set of charms.
-
-## Specification
-
-### Release cadence
-
-Charmed HPC releases will follow a regular cadence aligned with the Ubuntu LTS release cycle. Each Charmed HPC release will target the current Ubuntu LTS release as its primary base.
-
-Individual components within Charmed HPC (e.g. Charmed Slurm) may follow their own upstream-driven release cadences as defined in their respective specs. Since Charmed HPC is a set of charms rather than a single deployable artifact, a Charmed HPC release defines a tested, compatible set of charm versions that are verified to work together.
-
-### Support life-cycle
-
-Outside exceptional circumstances, each Charmed HPC release will receive bug and security fix support for 1 year.
-
-Components that track upstream projects (e.g. Charmed Slurm tracking SchedMD's Slurm) will follow the support life-cycle defined in their respective release policies.
+- filesystem-charms
+- sssd-operator
 
 ### Versioning scheme
 
-Version format: `<year>.<patch version #>`. Example Charmed HPC release numbers:
+Version format: `<major release>.<patch version #>`. Example Charmed HPC release numbers:
 
-- Initial release: "2026.0"
-- Bugfix release: "2026.1"
-- Security update: "2026.2"
+- Initial release: "1.0"
+- Bugfix release: "1.1"
+- Security update: "1.2"
 
-* Major release - new features, new Ubuntu base version, updated component versions
+* Major release - new features, new Ubuntu base version, updated artifact versions
 * Minor release - bug and security fixes only
   * Note that running `juju refresh` is necessary to pull the latest security and bug fix updates
 
-#### Release channels
+## Release cadence
 
-Since Charmed HPC is a set of charms rather than a single charm, release channels apply to each constituent charm individually:
+<!-- Charmed HPC releases will follow a regular cadence aligned with the Ubuntu LTS release cycle. Each Charmed HPC release will target the current Ubuntu LTS release as its primary base. -->
 
-* Each major release has its own Charmhub track per charm, e.g. "2026"
-* Each track has a corresponding GitHub branch, e.g. "2026"
+Individual components within Charmed HPC (e.g. Charmed Slurm) may follow their own upstream-driven release cadences as defined in their respective specs. Since Charmed HPC is a set of charms rather than a single deployable artifact, a Charmed HPC release defines a tested, compatible set of charm versions that are verified to work together.
+
+### Release channels and branches
+
+Since Charmed HPC is a set of charms rather than a single charm, release channels apply to each constituent charm individually.
+
+* Each track has a corresponding GitHub branch, e.g. "25.11"
 * Each track on Charmhub provides three channels:
    * Edge, the development channel
    * Candidate, to test the new release before publishing
    * Stable
      * No breaking changes will be made to integrations, configuration options, or actions in a stable channel of a charm
 
-### Documentation
+### Release cycle and feature freezes
+
+At a predetermined time, a 'soft' freeze point will be established; by this time, the current edge channel of each artifact for the current pre-release track must be pushed to Candidate. Following this push, any updates would be solely to resolve issues/bugs/etc. with the Candidate, ending with the 'hard' freeze.
+
+Given the variety of charms, the Candidate/Stable for a given charm may be the same as for the prior release.
+
+```mermaid
+%%{init: {'themeVariables': {'critBorderColor': '#ff0000', 'critBkgColor': '#ff0000'}}}%%
+gantt
+   title Charmed HPC Release X.0 steps
+   dateFormat YYYY-MM
+   todayMarker off
+   section Slurm
+        Slurm 26.05 released by SchedMD                         :milestone, a1, 2026-05, 0d
+        Charmed Slurm 26.05 release                             :milestone, 2026-06, 0d
+   section Charmed HPC
+        filesystem-charms dev                                   :f1, 2026-05, until v1
+        filesystem-charms Candidate                             :milestone, after f1
+        sssd-operator dev                                       :s1, 2026-03, 2026-06
+        sssd-operator Candidate                                 :milestone, s2, after s1, 0d
+        sssd-operator Stable                                    :milestone, 2026-07, 0d 
+        'Soft freeze'                                           :crit, milestone, v1, 2026-08, 0d
+        Feature polishing                                       :after v1, until v2
+        'Hard freeze'                                           :crit, milestone, v2, 2026-09, 0d
+        Release X.0                                             :milestone, 2026-10
+   section Ubuntu
+        Resolute Raccoon 26.04 LTS                              :2026-04, 2026-11
+        Noble Numbat 24.04 LTS                                  :2026-01, 2026-04
+```
+
+
+
+
+## Support life-cycle
+
+Outside exceptional circumstances, each Charmed HPC release will receive bug and security fix support for [TBD].
+
+<!-- Components that track upstream projects (e.g. Charmed Slurm tracking SchedMD's Slurm) will follow the support life-cycle defined in their respective release policies. -->
+
+
+
+
+
+## Documentation
 
 Warnings/limitations that will be included in the published documentation alongside the release notes:
 
 * Due to potential breaking changes between major releases, Charmed HPC cannot guarantee backwards compatibility with previous major versions
-  * If a user requirement necessitates versions that are not from corresponding releases, they should open an issue on GitHub (or Support Discussion) and contact the team
+  * If a user requirement necessitates artifact versions that are not from a single release, they should open an issue on GitHub (or Discourse) and work with the team
 
 #### Release Notes Template
 
-````markdown
----
-myst:
-  html_meta:
-    description: Release notes for Charmed HPC YYYY.Z, including highlights about new features, bug fixes, and other updates.
----
+````
+# Charmed HPC <major release>.<patch version #> Release Notes
 
-(ref-release-notes-charmed-hpc-YYYY.Z)=
-# Charmed HPC YYYY.Z release notes
+Release date: YYYY-MM-DD
 
-% NOTE: This is a template for Charmed HPC release notes. To use it, find
-% and replace `YYYY` with the full release year (e.g. 2026), and `Z` with the
-% patch version number (e.g. 0). Follow any instructions in comments, then
-% delete the comment.
+## Summary
 
-% Remove the comment prefix (%) from the appropriate sentence below, and delete
-% the other.
-% Charmed HPC YYYY.Z receives bug and security fix support for 1 year.
-% Charmed HPC YYYY.Z is a patch release containing bug and security fixes only.
+Brief overview of this release, including the primary focus (e.g., new Ubuntu base, 
+new artifact versions, bug fixes, security updates).
 
-% Optionally add any other introductory notes here. Fill out the content of the
-% sections below, and delete any sections that are not relevant to this release.
+## Artifacts in this release
 
-(ref-release-notes-charmed-hpc-YYYY.Z-requirements)=
-## Requirements and compatibility
+| Artifact | Track | Revision | Notes |
+|----------|-------|----------|-------|
+| Charmed Slurm | <track> | <revision> | See [Charmed Slurm release notes] |
+| filesystem-charms | <track> | <revision> | |
+| sssd-operator | <track> | <revision> | |
 
-% List the requirements and compatibility information for this release, e.g.
-% supported Ubuntu bases, Juju versions, and any other dependencies.
+## Underlying dependencies
 
-- Ubuntu base: <!-- e.g. Noble Numbat 24.04 LTS -->
-- Juju version: <!-- e.g. 3.6+ -->
+| Dependency | Version | Notes |
+|------------|---------|-------|
+| charmed-hpc-libs | <version> | |
 
-(ref-release-notes-charmed-hpc-YYYY.Z-highlights)=
 ## What's new
 
-This section highlights new and improved features in this release.
+### New features
 
-### Feature short description placeholder (replace this text)
+- Feature description and the artifact(s) it affects.
 
-% Dedicate a separate ### section for each new and improved feature highlight
-% description.
+### Improvements
 
-(ref-release-notes-charmed-hpc-YYYY.Z-bugfixes)=
-## Bug fixes
+- Improvement description.
 
-The following bug fixes are included in this release.
+## Requirements and compatibility
 
-% List of links to resolved bug fix issues from GitHub.
+### Supported Ubuntu bases
 
-(ref-release-notes-charmed-hpc-YYYY.Z-incompatible)=
-## Backwards-incompatible changes
+- Ubuntu <version> LTS (Noble Numbat / etc.)
 
-% List any changes that are not backwards compatible below.
+### Juju version
 
-### Incompatible change short description placeholder (replace this text)
+- Minimum Juju version: <version>
 
-% Dedicate a separate ### section to describe each change that is not backwards
-% compatible.
+## Backwards incompatible changes
 
-(ref-release-notes-charmed-hpc-YYYY.Z-deprecated)=
+- Change description and required user action, if any.
+
 ## Deprecated features
 
-% List any features that have been deprecated or removed in this release.
+- Feature or option that is deprecated, with recommended alternative.
 
-### Deprecated feature short description placeholder (replace this text)
+## Known issues
 
-% Dedicate a separate ### section to describe each deprecated feature.
+- Issue description and any available workaround.
 
-(ref-release-notes-charmed-hpc-YYYY.Z-components)=
-## Component versions
+## Upgrade notes
 
-% Update the table below with the component versions included in this release.
+### Upgrading from <previous major release>.x
 
-| Component      | Version |
-|----------------|---------|
-| Charmed Slurm  |         |
+Instructions or considerations for upgrading from the previous major release.
 
-(ref-release-notes-charmed-hpc-YYYY.Z-channels)=
-## Release channels
+### Refreshing charms
 
-This release is available on Charmhub under the `YYYY` track:
+```bash
+juju refresh <charm-name> --channel <track>/stable
+```
 
-- **Stable:** `juju deploy <charm> --channel YYYY/stable`
-- **Candidate:** `juju deploy <charm> --channel YYYY/candidate`
-- **Edge:** `juju deploy <charm> --channel YYYY/edge`
+## Support lifecycle
 
-To upgrade an existing deployment, run `juju refresh` to pull the latest revision from the stable channel.
+| Release | Release date | End of support |
+|---------|--------------|----------------|
+| <major release>.0 | YYYY-MM-DD | YYYY-MM-DD |
+
+Bug and security fix support is provided for [TBD] months after release.
+
+## References
+
+- [Charmed HPC release policy](link to this spec)
+- [Charmed Slurm release notes](link)
 ````
 
 ## Release notes sections
 
-General release notes sections:
+General release notes sections for Charmed HPC:
 
-* Long-term support or not
-  * Length of 'long-term'
-* Requirements and compatibility
-* What's new
+* Release summary
+* Artifacts and versions included in the release
+* What's new (features and improvements)
+* Requirements and compatibility (Ubuntu base, Juju version, Charmhub tracks)
 * Backwards incompatible changes
 * Deprecated features
-* Component versions
+* Known issues
+* Upgrade notes (including `juju refresh` instructions)
+* Support lifecycle
 
 ## References
 
