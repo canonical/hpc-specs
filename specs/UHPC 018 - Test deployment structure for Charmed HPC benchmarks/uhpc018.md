@@ -1,0 +1,170 @@
+---
+index: UHPC018
+title: Test deployment structure for Charmed HPC benchmarks
+---
+
+# Test deployment structure for Charmed HPC benchmarks
+
+## Abstract
+
+This spec defines how tests are structured in
+[`charmed-hpc-benchmarks`](https://github.com/canonical/charmed-hpc-benchmarks). Each test
+lives in the `tests/` tree and has two parts: a test plan in `plans/` and a
+Terragrunt stack instantiation in `deployments/` that describes the cluster. Gherkinator
+turns the plan into the BDD feature file that deploys the cluster, runs the test, and tears
+it down. Tests build on reusable Terragrunt units and stacks shared by all of them.
+
+## Rationale
+
+The repository currently has a single test setup: a monolithic Terraform root module in
+`scripts/azure`, applied by a script that also bootstrapped the Juju controller, installed
+packages, and configured nodes imperatively. The cluster shape was hardcoded in the module,
+so a test that needed a different cluster meant copying and editing the whole module.
+
+The new structure follows the conventional shape of projects using Terragrunt:
+split the deployment into units that wrap individual Terraform modules, and
+stacks that compose units together to build bigger deployments. This allows easy
+reusability, since new tests only need to define their specific stack from the
+already available set of units, or even reuse a stack that is already defined by
+another test, but changing its deployment parameters. This reusability is additionally
+extended with the usage of `pytest-jubilant-bdd` for the test definitions, making
+it extra simple to reuse step handlers between tests, which also improves the
+readability of the tests.
+
+## Specification
+
+### Repository layout
+
+```
+units/               # Reusable Terragrunt units, one per infrastructure piece
+  root.hcl           # Configuration shared by all units
+  <unit>/
+    terragrunt.hcl   # Unit definition
+    *.tf             # Local module, when the unit does not wrap a remote one
+stacks/              # Reusable Terragrunt stacks: compositions of units
+  <stack>/
+    terragrunt.stack.hcl
+tests/               # Every test is an integration test
+  conftest.py        # Repo-specific step handlers shared by all tests
+  plans/             # Gherkinator test plans, one per test
+    <test>.yaml
+  assets/            # Static assets for tests, e.g. the payload script run on the login node
+  deployments/       # Stack instantiations, one per test
+    <test>/
+      terragrunt.stack.hcl
+```
+
+### Units and stacks
+
+A unit wraps one Terraform module and is the smallest reusable piece. We define a new unit for
+each distinct piece of infrastructure that a stack may compose independently, so that stacks
+and tests can reuse it.
+
+A stack composes units into a deployable cluster. We define a new stack for each cluster shape
+shared by several tests, so that each test only has to declare its deployment parameters.
+
+### Tests
+
+Every test has two required pieces, both under `tests/`:
+
+* A deployment in `deployments/<test>/terragrunt.stack.hcl`, an explicit stack instantiation that
+  points at a stack in `stacks/` and sets the values the test needs. The stack instantiation
+  describes the cluster and nothing else, so it looks the same no matter what runs on it.
+
+* A test plan in `plans/<test>.yaml`, written for [Gherkinator](https://github.com/canonical/gherkinator).
+  Static assets used by the test plan live in `assets/`. The feature automates the full test lifecycle:
+  1. Validate the environment, such as the `ARM_*` credential variables on Azure.
+  2. Deploy the cluster by applying the test's Terragrunt stack.
+  3. Set up access to the stack outputs.
+  4. Set up Jubilant to manage the new controller and model.
+  5. Wait for the model applications to become active.
+  6. Run the test payload on the cluster and verify it ran successfully.
+  7. Copy the results back to the local machine.
+  8. Destroy the stack and delete local artifacts.
+
+A step stores the values it produces (stack outputs, hostnames, key paths) in the testing
+context, and later steps reference them as `{key}`.
+
+Any longer scripts that need to run on a specific unit or machine are kept in `assets/`
+and run using `juju exec`.
+
+The following is a sample test for the Azure ReFrame suite:
+
+```gherkin
+@candidate @performance @implemented
+Feature: Run the ReFrame benchmark suite on an Azure Slurm cluster
+
+  Background:
+    Given the environment variables 'ARM_CLIENT_ID', 'ARM_CLIENT_SECRET' and 'ARM_SUBSCRIPTION_ID' are set
+    And I apply the Terragrunt stack at 'tests/deployments/benchmarks'
+    And I store the Terragrunt stack output 'slurm.controller.juju_data_dir' as 'juju_data'
+    And I set the environment variable 'JUJU_DATA' to '{juju_data}'
+    And I adopt the existing model 'charmed-hpc:admin/charmed-hpc'
+    And all applications are 'active' within '3600' seconds
+    And I write the Terragrunt stack output 'network.ssh_private_key' to a temporary file as 'ssh_key'
+
+  Scenario: Run ReFrame checks and collect results
+    Given I store the hostname of the machine running app 'slurmrestd' as 'slurmrestd_host'
+    And I store the machine ID of unit 'login/leader' as 'login_machine'
+    And I archive the Git repository at '.' as 'charmed-hpc-benchmarks.tar'
+    When I transfer 'charmed-hpc-benchmarks.tar' to unit 'login/leader' at '/nfs/home/charmed-hpc-benchmarks.tar'
+    And I execute 'cd /nfs/home && rm -rf charmed-hpc-benchmarks && mkdir charmed-hpc-benchmarks && tar -xf charmed-hpc-benchmarks.tar -C charmed-hpc-benchmarks && rm charmed-hpc-benchmarks.tar' on machine '{login_machine}'
+    And I execute 'bash /nfs/home/charmed-hpc-benchmarks/tests/assets/run_checks.sh {slurmrestd_host}' on machine '{login_machine}' within '7200' seconds
+    Then the last executed command succeeded
+    And I recursively transfer '/nfs/home/charmed-hpc-benchmarks/perflogs' from unit 'login/leader' to './perflogs''
+    And I recursively transfer '/nfs/home/charmed-hpc-benchmarks/output' from unit 'login/leader' to './output'
+```
+
+### Step handlers
+
+[`pytest-jubilant-bdd`](https://github.com/canonical/pytest-jubilant-bdd) already has
+many of the step handlers we require. However, to fully migrate everything, we need
+to include the following additional handlers either in the benchmarks repo or upstream:
+
+* `Given the environment variables '<name>', ... are set`; Validates cloud credentials before deploying.
+* `Given I apply the Terragrunt stack at '<path>'`.
+* `Given I store the Terragrunt stack output '<name>' as '<key>'`.
+* `Given I set the environment variable '<name>' to '<value>'`.
+* `Given I adopt the existing model '<controller>:<user>/<model>'`; might be changed to something else
+  if the syntax seems a bit opaque, just the functionality for switching models is required.
+* `Then all applications are '<status>' within '<n>' seconds`.
+* `Given I write the Terragrunt stack output '<name>' to a temporary file as '<key>'`.
+* `Given I store the hostname of the machine running app '<app>' as '<key>'`.
+* `Given I store the machine ID of unit '<unit>' as '<key>'`.
+* `When I execute '<command>' on machine\|unit '<target>' within '<n>' seconds`; already provided
+  by the plugin as `run_exec` (`I execute ... on unit ...`), so only the timeout clause is new.
+* `Then the last executed command succeeded`.
+* `When I transfer '<file>' to unit/machine '<unit/machine>' at '<path>'` and
+  `When I recursively transfer '<path>' from unit/machine '<unit/machine>' to '<path>'`;
+  serves both files and directories. We might also need an additional `using identity file '<key>'`
+  argument if `juju scp` shows to be less reliable than expected.
+<!-- Maybe not required? We could also have a python package for the reframe test that gets packaged,
+     then sent to the unit and finally installed -->
+* `Given I archive the Git repository at '<path>' as '<archive>'`: tars `git ls-files`
+  output so the cluster runs uncommitted local edits.
+
+Further discussion is required to determine which step handlers are upstreamable and
+which ones should be exclusive to the benchmarks repo.
+
+## Evaluated alternatives
+
+Keeping one monolithic Terraform module per test was rejected because it duplicates the
+deployment logic across tests and across clouds; the unit and stack layers exist to make that
+logic reusable.
+
+Driving tests with a per-test bash script was rejected because the code becomes unreadable
+very fast, and having reusable step handlers would simplify much of the complexity and
+make the tests much more readable.
+
+## Further information
+
+1. [Terragrunt explicit stacks](https://docs.terragrunt.com/features/stacks/explicit/): the
+   Terragrunt feature the tests build on.
+2. [canonical/charmed-hpc-terraform](https://github.com/canonical/charmed-hpc-terraform): the
+   Terraform modules wrapped by the units.
+3. [canonical/pytest-jubilant-bdd](https://github.com/canonical/pytest-jubilant-bdd): the
+   pytest plugin providing the reusable Juju step handlers.
+4. [pytest-bdd](https://github.com/pytest-dev/pytest-bdd): the Gherkin test framework the
+   feature files run on.
+5. [canonical/gherkinator](https://github.com/canonical/gherkinator): the tool that
+   transpiles the YAML test plans in `plans/` into the Gherkin feature files in `features/`.
