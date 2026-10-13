@@ -1,18 +1,17 @@
 ---
 index: UHPC018
-title: Test deployment structure for Charmed HPC benchmarks
+title: Test deployment structure for Charmed HPC
 ---
 
-# Test deployment structure for Charmed HPC benchmarks
+# Test deployment structure for Charmed HPC
 
 ## Abstract
 
-This spec defines how tests are structured in
-[`charmed-hpc-benchmarks`](https://github.com/canonical/charmed-hpc-benchmarks). Each test
-lives in the `tests/` tree and has two parts: a test plan in `plans/` and a
-Terragrunt stack instantiation in `deployments/` that describes the cluster. Gherkinator
-turns the plan into the BDD feature file that deploys the cluster, runs the test, and tears
-it down. Tests build on reusable Terragrunt units and stacks shared by all of them.
+This spec defines a new structure for Charmed HPC deployment tests. Each test lives
+in the `tests/` tree and has two parts: a test plan in `plans/` and a Terragrunt
+stack instantiation in `deployments/` that describes the cluster. Gherkinator turns
+the plan into the BDD feature file that deploys the cluster, runs the test, and
+tears it down. Tests build on reusable Terragrunt units and stacks shared by all of them.
 
 ## Rationale
 
@@ -31,7 +30,20 @@ extended with the usage of `pytest-jubilant-bdd` for the test definitions, makin
 it extra simple to reuse step handlers between tests, which also improves the
 readability of the tests.
 
+The same structure serves every kind of test because the lifecycle is identical: deploy a
+cluster, run a payload, collect the results, tear the cluster down. A benchmark, a scale
+test, and a reliability test differ only in the payload they run and the cluster shape they
+need, which is exactly what the test plan and the stack instantiation capture.
+
 ## Specification
+
+### charmed-hpc-benchmarks
+
+The Charmed HPC tests repository, currently named
+[`charmed-hpc-benchmarks`](https://github.com/canonical/charmed-hpc-benchmarks), hosts the
+benchmarks, scale tests, and reliability tests used to validate Charmed HPC deployments. Its
+scope now goes beyond benchmarks, so the repository will be renamed; the new name is still to
+be decided.
 
 ### Repository layout
 
@@ -81,7 +93,9 @@ Every test has two required pieces, both under `tests/`:
   describes the cluster and nothing else, so it looks the same no matter what runs on it.
 
 * A test plan in `plans/<test>.yaml`, written for [Gherkinator](https://github.com/canonical/gherkinator).
-  Static assets used by the test plan live in `assets/`. The feature automates the full test lifecycle:
+  Static assets used by the test plan live in `assets/`. The plan's `type` field classifies
+  the test as functional, performance, reliability, or one of the other kinds the Gherkinator
+  schema defines. The feature automates the full test lifecycle:
   1. Validate the environment, such as the `ARM_*` credential variables on Azure.
   2. Deploy the cluster by applying the test's Terragrunt stack.
   3. Set up access to the stack outputs.
@@ -92,11 +106,11 @@ Every test has two required pieces, both under `tests/`:
   8. Destroy the stack and delete local artifacts.
 
 Teardown is not written as a Gherkin step: pytest-bdd stops at the first failing step, so an
-in-scenario destroy would leak the cluster exactly when it matters. The apply step registers
-the stack it deployed, and a pytest session finalizer destroys every registered stack after
-the run, retrying a few times because Azure can fail to delete the NFS virtual network while
-a VM still uses it. The same finalizer deletes temporarily written files, such as the SSH
-private key and the repository archive.
+in-scenario destroy would leak the cluster before being able to inspect the error. The apply
+step registers the stack it deployed, and a pytest session finalizer destroys every registered
+stack after the run, retrying a few times in case the cloud resources are not cleaned
+up properly the first time. The same finalizer deletes temporarily written files,
+such as SSH private keys and the repository archive.
 
 A step stores the values it produces (stack outputs, hostnames, key paths) in the testing
 context, and later steps reference them as `{key}`.
@@ -104,7 +118,8 @@ context, and later steps reference them as `{key}`.
 Any longer scripts that need to run on a specific unit or machine are kept in `assets/`
 and run using `juju exec`.
 
-The following is a sample test for the Azure ReFrame suite:
+The following sample shows the structure with the ReFrame benchmark suite on Azure; a scale
+or reliability test would differ only in its stack values and payload:
 
 ```gherkin
 @candidate @performance @implemented
@@ -135,7 +150,7 @@ Feature: Run the ReFrame benchmark suite on an Azure Slurm cluster
 
 [`pytest-jubilant-bdd`](https://github.com/canonical/pytest-jubilant-bdd) already has
 many of the step handlers we require. However, to fully migrate everything, we need
-to include the following additional handlers either in the benchmarks repo or upstream:
+to include the following additional handlers either in the tests repository or upstream:
 
 * `Given the environment variables '<name>', ... are set`; Validates cloud credentials before deploying.
 * `Given I apply the Terragrunt stack at '<path>'`.
@@ -161,7 +176,7 @@ to include the following additional handlers either in the benchmarks repo or up
   output so the cluster runs uncommitted local edits.
 
 Further discussion is required to determine which step handlers are upstreamable and
-which ones should be exclusive to the benchmarks repo.
+which ones should be exclusive to the tests repository.
 
 ## Evaluated alternatives
 
