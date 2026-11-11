@@ -1,21 +1,25 @@
 ---
 index: UHPC018
-title: Test deployment structure for Charmed HPC
+title: Product-level test structure for Charmed HPC
 ---
 
-# Test deployment structure for Charmed HPC
+# Product-level test structure for Charmed HPC
 
 ## Abstract
 
-This spec defines a new structure for Charmed HPC deployment tests. Each test lives
-in the `tests/` tree and has two parts: a test plan in `plans/` and a Terragrunt
-stack instantiation in `deployments/` that describes the cluster. Gherkinator turns
-the plan into the BDD feature file that deploys the cluster, runs the test, and
-tears it down. Tests build on reusable Terragrunt units and stacks shared by all of them.
+This specification defines a new structure for product-level Charmed HPC tests.
+Each test lives in the `tests/` tree and has two parts: a test plan in `plans/`
+and a Terragrunt stack instantiation in `deployments/` that describes the cluster.
+Gherkinator transpiles the plan into the BDD feature file, and
+[`pytest-jubilant-bdd`](https://github.com/canonical/pytest-jubilant-bdd)
+drives the feature file. Tests build on reusable Terragrunt units and stacks
+shared by all of them.
+Component and artifact-level tests are intentionally left out of scope and may
+be defined by separate specifications.
 
 ## Rationale
 
-The repository currently has a single test setup: a monolithic Terraform root module in
+The `charmed-hpc-benchmarks` repository currently has a single test setup: a monolithic Terraform root module in
 `scripts/azure`, applied by a script that also bootstrapped the Juju controller, installed
 packages, and configured nodes imperatively. The cluster shape was hardcoded in the module,
 so a test that needed a different cluster meant copying and editing the whole module.
@@ -105,12 +109,12 @@ Every test has two required pieces, both under `tests/`:
   7. Copy the results back to the local machine.
   8. Destroy the stack and delete local artifacts.
 
-Teardown is not written as a Gherkin step: pytest-bdd stops at the first failing step, so an
-in-scenario destroy would leak the cluster before being able to inspect the error. The apply
-step registers the stack before applying it, and a pytest session finalizer destroys every registered
-stack after the run, retrying a few times in case the cloud resources are not cleaned
-up properly the first time. The same finalizer deletes temporarily written files,
-such as SSH private keys and the repository archive.
+Cleanup is automatic: the Terragrunt apply step registers the stack, and a pytest session
+finalizer destroys every registered stack after the run, so failed scenarios never leave
+cloud resources behind. The same finalizer deletes temporarily written files, such as SSH
+private keys and the repository archive. The finalizer should also allow skipping cleanup,
+similar to the `--juju-bdd-no-teardown` flag of `pytest-jubilant-bdd`, so a failed run can
+leave the cluster up for inspection.
 
 A step stores the values it produces (stack outputs, hostnames, key paths) in the testing
 context, and later steps reference them as `{key}`.
@@ -118,8 +122,74 @@ context, and later steps reference them as `{key}`.
 Any longer scripts that need to run on a specific unit or machine are kept in `assets/`
 and run using `juju exec`.
 
-The following sample shows the structure with the ReFrame benchmark suite on Azure; a scale
-or reliability test would differ only in its stack values and payload:
+### Future work
+
+[`pytest-jubilant-bdd`](https://github.com/canonical/pytest-jubilant-bdd) already has
+many of the step handlers we require. However, fully migrating the existing tests
+might require the additional handlers below, either in the tests repository or upstream.
+It is important to mention that this section is not an authoritative source for
+the step handlers that need to be implemented; future work will determine which
+step handlers are truly required.
+
+#### System step handlers
+
+* `Given the environment variables '<name>', ... are set`: used to validate
+  cloud credentials before deploying, so the scenario fails fast.
+* `Given I set the environment variable '<name>' to '<value>'`: points the Juju client
+  at the controller created by the deployment, e.g. through `JUJU_DATA`.
+* `Then the last executed command succeeded`: lets a scenario assert on the outcome of
+  a detached command without wrapping it in shell conditionals.
+<!-- Maybe not required? We could also have a python package for the reframe test that gets packaged,
+     then sent to the unit and finally installed -->
+* `Given I archive the Git repository at '<path>' as '<archive>'`: tars `git ls-files`
+  output so the cluster runs uncommitted local edits.
+
+#### Juju step handlers
+
+* `Given I store the hostname of the machine running app '<app>' as '<key>'` and
+  `Given I store the machine ID of unit '<unit>' as '<key>'`: both are needed to build
+  commands that target machines over SSH rather than through Juju.
+
+#### Terragrunt step handlers
+
+These handlers wrap the Terragrunt CLI so that scenarios can deploy the cluster and
+read back its outputs:
+
+* `Given I apply the Terragrunt stack at '<path>'`: deploys the cluster. The handler
+  registers the stack with the session finalizer before applying it (see
+  [Tests](#tests)), so the cluster is destroyed even when the scenario fails.
+* `Given I store the Terragrunt stack output '<name>' as '<key>'`: exposes deployment
+  outputs, such as the controller's `juju_data_dir`, to later steps as `{key}`.
+* `Given I write the Terragrunt stack output '<name>' to a temporary file as '<key>'`:
+  some outputs, such as SSH private keys, must live on disk to be usable, so the
+  handler writes them to a temporary file that the session finalizer deletes after
+  the run.
+
+#### Existing handlers that need new clauses
+
+* `switch_model` only switches between models registered in the testing context via
+  `I add model`; it should also accept models that exist only in the Juju client data
+  directory, so that `Given I switch to the model '<model>'` can select a model created
+  outside the usual Jubilant deployment flow, such as the one deployed by the Terragrunt
+  stack.
+* `assert_workload_status` currently only checks a single app or unit; it should gain a
+  bulk form so that `Then all applications are '<status>' within '<n>' seconds` can wait
+  for the whole deployed cluster to settle before any payload runs on it. The optional
+  `within '{timeout}' seconds` clause is already supported.
+* `When I execute '<command>' on machine|unit '<target>' within '<n>' seconds`; already
+  provided by the plugin as `run_exec` (`I execute ... on unit ...`), so only the
+  timeout clause is new. An `and stream its output` clause runs the command detached
+  on the target and tails a log file into the terminal, for long payloads such as the
+  ReFrame run.
+* `When I transfer '<path>' to machine|unit '<target>' at '<path>'` and
+  `When I transfer '<path>' from machine|unit '<target>' to '<path>'`; a single handler
+  serves both files and directories, detecting which one it is transferring so no
+  explicit `recursively` clause is needed (canonical/pytest-jubilant-bdd#45). An
+  additional `using identity file '<key>'` clause is required when the Juju client
+  data directory has no SSH key registered in the model, as with the `juju_data_dir`
+  generated by the controller module (canonical/pytest-jubilant-bdd#47).
+
+The following sample shows what a test looks like once the handlers above are available:
 
 ```gherkin
 @candidate @performance @implemented
@@ -130,7 +200,7 @@ Feature: Run the ReFrame benchmark suite on an Azure Slurm cluster
     And I apply the Terragrunt stack at 'tests/deployments/benchmarks'
     And I store the Terragrunt stack output 'slurm.controller.juju_data_dir' as 'juju_data'
     And I set the environment variable 'JUJU_DATA' to '{juju_data}'
-    And I adopt the existing model 'charmed-hpc:admin/charmed-hpc'
+    And I switch to the model 'admin/charmed-hpc'
     And all applications are 'active' within '3600' seconds
     And I write the Terragrunt stack output 'slurm.model.ssh_private_key' to a temporary file as 'ssh_key'
 
@@ -142,43 +212,9 @@ Feature: Run the ReFrame benchmark suite on an Azure Slurm cluster
     And I execute 'cd /nfs/home && rm -rf charmed-hpc-benchmarks && mkdir charmed-hpc-benchmarks && tar -xf charmed-hpc-benchmarks.tar -C charmed-hpc-benchmarks && rm charmed-hpc-benchmarks.tar' on machine '{login_machine}' within '600' seconds
     And I execute 'bash /nfs/home/charmed-hpc-benchmarks/tests/assets/run_checks.sh {slurmrestd_host}' on machine '{login_machine}' within '7200' seconds and stream its output
     Then the last executed command succeeded
-    And I recursively transfer '/nfs/home/charmed-hpc-benchmarks/perflogs' from unit 'login/leader' to './perflogs' using identity file '{ssh_key}'
-    And I recursively transfer '/nfs/home/charmed-hpc-benchmarks/output' from unit 'login/leader' to './output' using identity file '{ssh_key}'
+    And I transfer '/nfs/home/charmed-hpc-benchmarks/perflogs' from unit 'login/leader' to './perflogs' using identity file '{ssh_key}'
+    And I transfer '/nfs/home/charmed-hpc-benchmarks/output' from unit 'login/leader' to './output' using identity file '{ssh_key}'
 ```
-
-### Step handlers
-
-[`pytest-jubilant-bdd`](https://github.com/canonical/pytest-jubilant-bdd) already has
-many of the step handlers we require. However, to fully migrate everything, we need
-to include the following additional handlers either in the tests repository or upstream:
-
-* `Given the environment variables '<name>', ... are set`; Validates cloud credentials before deploying.
-* `Given I apply the Terragrunt stack at '<path>'`.
-* `Given I store the Terragrunt stack output '<name>' as '<key>'`.
-* `Given I set the environment variable '<name>' to '<value>'`.
-* `Given I adopt the existing model '<controller>:<user>/<model>'`; might be changed to something else
-  if the syntax seems a bit opaque, just the functionality for switching models is required.
-* `Then all applications are '<status>' within '<n>' seconds`.
-* `Given I write the Terragrunt stack output '<name>' to a temporary file as '<key>'`.
-* `Given I store the hostname of the machine running app '<app>' as '<key>'`.
-* `Given I store the machine ID of unit '<unit>' as '<key>'`.
-* `When I execute '<command>' on machine|unit '<target>' within '<n>' seconds`; already provided
-  by the plugin as `run_exec` (`I execute ... on unit ...`), so only the timeout clause is new.
-  An `and stream its output` clause runs the command detached on the target and tails a log
-  file into the terminal, for long payloads such as the ReFrame run.
-* `Then the last executed command succeeded`.
-* `When I transfer '<file>' to machine|unit '<target>' at '<path>'` and
-  `When I recursively transfer '<path>' from machine|unit '<target>' to '<path>'`;
-  serves both files and directories. An additional `using identity file '<key>'` clause is
-  required when the Juju client data directory has no SSH key registered in the model, as
-  with the `juju_data_dir` generated by the controller module.
-<!-- Maybe not required? We could also have a python package for the reframe test that gets packaged,
-     then sent to the unit and finally installed -->
-* `Given I archive the Git repository at '<path>' as '<archive>'`: tars `git ls-files`
-  output so the cluster runs uncommitted local edits.
-
-Further discussion is required to determine which step handlers are upstreamable and
-which ones should be exclusive to the tests repository.
 
 ## Evaluated alternatives
 
