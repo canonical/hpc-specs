@@ -107,7 +107,7 @@ Every test has two required pieces, both under `tests/`:
 
 Teardown is not written as a Gherkin step: pytest-bdd stops at the first failing step, so an
 in-scenario destroy would leak the cluster before being able to inspect the error. The apply
-step registers the stack it deployed, and a pytest session finalizer destroys every registered
+step registers the stack before applying it, and a pytest session finalizer destroys every registered
 stack after the run, retrying a few times in case the cloud resources are not cleaned
 up properly the first time. The same finalizer deletes temporarily written files,
 such as SSH private keys and the repository archive.
@@ -132,7 +132,7 @@ Feature: Run the ReFrame benchmark suite on an Azure Slurm cluster
     And I set the environment variable 'JUJU_DATA' to '{juju_data}'
     And I adopt the existing model 'charmed-hpc:admin/charmed-hpc'
     And all applications are 'active' within '3600' seconds
-    And I write the Terragrunt stack output 'slurm.network.ssh_private_key' to a temporary file as 'ssh_key'
+    And I write the Terragrunt stack output 'slurm.model.ssh_private_key' to a temporary file as 'ssh_key'
 
   Scenario: Run ReFrame checks and collect results
     Given I store the hostname of the machine running app 'slurmrestd' as 'slurmrestd_host'
@@ -140,7 +140,7 @@ Feature: Run the ReFrame benchmark suite on an Azure Slurm cluster
     And I archive the Git repository at '.' as 'charmed-hpc-benchmarks.tar'
     When I transfer 'charmed-hpc-benchmarks.tar' to unit 'login/leader' at '/nfs/home/charmed-hpc-benchmarks.tar' using identity file '{ssh_key}'
     And I execute 'cd /nfs/home && rm -rf charmed-hpc-benchmarks && mkdir charmed-hpc-benchmarks && tar -xf charmed-hpc-benchmarks.tar -C charmed-hpc-benchmarks && rm charmed-hpc-benchmarks.tar' on machine '{login_machine}' within '600' seconds
-    And I execute 'bash /nfs/home/charmed-hpc-benchmarks/tests/assets/run_checks.sh {slurmrestd_host}' on machine '{login_machine}' within '7200' seconds
+    And I execute 'bash /nfs/home/charmed-hpc-benchmarks/tests/assets/run_checks.sh {slurmrestd_host}' on machine '{login_machine}' within '7200' seconds and stream its output
     Then the last executed command succeeded
     And I recursively transfer '/nfs/home/charmed-hpc-benchmarks/perflogs' from unit 'login/leader' to './perflogs' using identity file '{ssh_key}'
     And I recursively transfer '/nfs/home/charmed-hpc-benchmarks/output' from unit 'login/leader' to './output' using identity file '{ssh_key}'
@@ -164,6 +164,8 @@ to include the following additional handlers either in the tests repository or u
 * `Given I store the machine ID of unit '<unit>' as '<key>'`.
 * `When I execute '<command>' on machine|unit '<target>' within '<n>' seconds`; already provided
   by the plugin as `run_exec` (`I execute ... on unit ...`), so only the timeout clause is new.
+  An `and stream its output` clause runs the command detached on the target and tails a log
+  file into the terminal, for long payloads such as the ReFrame run.
 * `Then the last executed command succeeded`.
 * `When I transfer '<file>' to machine|unit '<target>' at '<path>'` and
   `When I recursively transfer '<path>' from machine|unit '<target>' to '<path>'`;
